@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-const nAT_PMP_PORT = 5351
-const nAT_TRIES = 9
-const nAT_INITIAL_MS = 250
+const defaultPort = 5351
+const maxRetries = 9
+const initialPause = 250 * time.Millisecond
 
 // A caller that implements the NAT-PMP RPC protocol.
 type network struct {
@@ -18,7 +18,7 @@ type network struct {
 func (n *network) call(msg []byte, timeout time.Duration) (result []byte, err error) {
 	var server net.UDPAddr
 	server.IP = n.gateway
-	server.Port = nAT_PMP_PORT
+	server.Port = defaultPort
 	conn, err := net.DialUDP("udp", nil, &server)
 	if err != nil {
 		return
@@ -36,9 +36,9 @@ func (n *network) call(msg []byte, timeout time.Duration) (result []byte, err er
 	needNewDeadline := true
 
 	var tries uint
-	for tries = 0; (tries < nAT_TRIES && finalTimeout.IsZero()) || time.Now().Before(finalTimeout); {
+	for tries = 0; (tries < maxRetries && finalTimeout.IsZero()) || time.Now().Before(finalTimeout); {
 		if needNewDeadline {
-			nextDeadline := time.Now().Add((nAT_INITIAL_MS << tries) * time.Millisecond)
+			nextDeadline := time.Now().Add(initialPause * 1 << tries)
 			err = conn.SetDeadline(minTime(nextDeadline, finalTimeout))
 			if err != nil {
 				return
@@ -53,7 +53,7 @@ func (n *network) call(msg []byte, timeout time.Duration) (result []byte, err er
 		var remoteAddr *net.UDPAddr
 		bytesRead, remoteAddr, err = conn.ReadFromUDP(result)
 		if err != nil {
-			if err.(net.Error).Timeout() {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
 				tries++
 				needNewDeadline = true
 				continue

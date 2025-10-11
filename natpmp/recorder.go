@@ -1,6 +1,8 @@
 package natpmp
 
-import "time"
+import (
+	"time"
+)
 
 type callObserver interface {
 	observeCall(msg []byte, result []byte, err error)
